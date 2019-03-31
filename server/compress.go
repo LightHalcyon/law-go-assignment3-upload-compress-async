@@ -1,14 +1,10 @@
 package server
 
 import (
-	"fmt"
-	"io/ioutil"
-	"io"
-	"net/http"
 	"os"
 	"math"
-	"strconv"
-	"archive/zip"
+	"compress/gzip"
+	"bytes"
 )
 
 // Split splits file to chunks
@@ -29,4 +25,21 @@ func Split(file os.File) [10][]byte {
 	}
 
 	return chunks
+}
+
+// Compress compress bytes given
+func Compress(file []byte) ([]byte, error) {
+	var err error
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	
+	_, err = gz.Write(file)
+	if err != nil {
+		err = gz.Flush()
+	}
+	if err != nil {
+		err = gz.Close()
+	}
+
+	return b.Bytes(), err
 }
