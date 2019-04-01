@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"io/ioutil"
 	"path/filepath"
+	"fmt"
+	"math/rand"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
@@ -66,6 +68,13 @@ func failOnError(err error, msg string) {
 
 //     }
 // }
+
+// TokenGenerator generates token for as key for downloading
+func TokenGenerator() string {
+	b := make([]byte, 18)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
 
 func startCompress(c *gin.Context) {
 	var cfiles [10][]byte
@@ -131,6 +140,10 @@ func startCompress(c *gin.Context) {
 		filename := filepath.Base(fileHeader.Filename) + ".gz"
 
 		err = ioutil.WriteFile(filename, cfile, 0644)
+
+		key := TokenGenerator()
+		files[key] = filename
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, appError{
 				Code:		http.StatusInternalServerError,
@@ -161,6 +174,8 @@ func main() {
 	exchangeName := "1406568753"
 	// exchangeType := os.Getenv("EXCTYPE")
 	exchangeType := "direct"
+
+	files = make(map[string]string)
 
 	conn, err = amqp.Dial(url + vhost)
 	failOnError(err, "Failed to connect to RabbitMQ")
