@@ -5,7 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
-	// "os"
+	"io/ioutil"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
@@ -20,6 +21,7 @@ type appError struct {
 var ch *amqp.Channel
 var err error
 var conn *amqp.Connection
+var files map[string]string
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -27,42 +29,43 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func (errs *appError) Error() string {
-	return errs.Message
-}
+// func (errs *appError) Error() string {
+// 	return errs.Message
+// }
 
-// JSONAppErrorReporter Error middleware
-func JSONAppErrorReporter() gin.HandlerFunc {
-    return jsonAppErrorReporterT(gin.ErrorTypeAny)
-}
+// // JSONAppErrorReporter Error middleware
+// func JSONAppErrorReporter() gin.HandlerFunc {
+//     return jsonAppErrorReporterT(gin.ErrorTypeAny)
+// }
 
-func jsonAppErrorReporterT(errType gin.ErrorType) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        c.Next()
-        detectedErrors := c.Errors.ByType(errType)
+// func jsonAppErrorReporterT(errType gin.ErrorType) gin.HandlerFunc {
+//     return func(c *gin.Context) {
+//         c.Next()
+//         detectedErrors := c.Errors.ByType(errType)
 
-        log.Println("Handle APP error")
-        if len(detectedErrors) > 0 {
-            errs := detectedErrors[0].Err
-            var parsedError *appError
-            switch errs.(type) {
-				case *appError:
-					parsedError = errs.(*appError)
-				default:
-					parsedError = &appError{ 
-						Code: http.StatusInternalServerError,
-						Message: "Internal Server Error",
-					}
-            }
-            // Put the error into response
-            c.IndentedJSON(parsedError.Code, parsedError)
-            // c.Abort()
-            c.AbortWithStatusJSON(parsedError.Code, parsedError)
-            return
-        }
+//         log.Println("Handle APP error")
+//         if len(detectedErrors) > 0 {
+// 			errs := detectedErrors[0].Err
+// 			log.Println(detectedErrors)
+//             var parsedError *appError
+//             switch errs.(type) {
+// 				case *appError:
+// 					parsedError = errs.(*appError)
+// 				default:
+// 					parsedError = &appError{ 
+// 						Code: http.StatusInternalServerError,
+// 						Message: "Internal Server Error",
+// 					}
+//             }
+//             // Put the error into response
+//             // c.IndentedJSON(parsedError.Code, parsedError)
+//             // c.Abort()
+//             c.AbortWithStatusJSON(parsedError.Code, parsedError)
+//             return
+//         }
 
-    }
-}
+//     }
+// }
 
 func startCompress(c *gin.Context) {
 	var cfiles [10][]byte
@@ -72,20 +75,29 @@ func startCompress(c *gin.Context) {
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.Error(err)
+		c.JSON(http.StatusBadRequest, appError{
+			Code:		http.StatusBadRequest,
+			Message:	"File get error, did you upload a file?",
+		})
 		return
 	}
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, appError{
+			Code:		http.StatusInternalServerError,
+			Message:	err.Error(),
+		})
 		return
 	}
 	defer file.Close()
 
 	buf := bytes.NewBuffer(nil)
 	if _, err := io.Copy(buf, file); err != nil {
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, appError{
+			Code:		http.StatusInternalServerError,
+			Message:	err.Error(),
+		})
 		return
 	}
 
@@ -103,14 +115,10 @@ func startCompress(c *gin.Context) {
 		}
 		
 		percentage := (i+1) * 10
-		err = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
+		_ = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(string(percentage) + "% Compressed"),
 		})
-		if err != nil {
-			c.Error(err)
-			break
-		}
 		index = i
 	}
 
@@ -119,18 +127,29 @@ func startCompress(c *gin.Context) {
 	}
 	
 	if compressed {
+		cfile := Combine(cfiles)
+		filename := filepath.Base(fileHeader.Filename) + ".gz"
+
+		err = ioutil.WriteFile(filename, cfile, 0644)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, appError{
+				Code:		http.StatusInternalServerError,
+				Message:	"Failed to write compressed file",
+			})
+			return
+		}
+
 		c.JSON(http.StatusOK, appError{
 			Code:		http.StatusOK,
 			Message:	"File Compressed",
 		})
 		return
-	} else {
-		c.JSON(http.StatusUnprocessableEntity, appError{
-			Code:		http.StatusUnprocessableEntity,
-			Message:	"Failed to compress file",
-		})
-		return
 	}
+	c.JSON(http.StatusUnprocessableEntity, appError{
+		Code:		http.StatusUnprocessableEntity,
+		Message:	"Failed to compress file",
+	})
+	return	
 }
 
 func main() {
@@ -153,9 +172,9 @@ func main() {
 
 	err = ch.ExchangeDeclare(exchangeName, exchangeType, false, false, false, false, nil)
 	failOnError(err, "Failed to declare exchange")
-	
+
 	r := gin.Default()
-	r.Use(JSONAppErrorReporter())
+	// r.Use(JSONAppErrorReporter())
 	r.POST("/compress", startCompress)
 	log.Println("Running in localhost:20606")
 	r.Run("0.0.0.0:20606")

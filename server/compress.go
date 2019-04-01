@@ -37,3 +37,12 @@ func Compress(file []byte) ([]byte, error) {
 
 	return b.Bytes(), err
 }
+
+// Combine combines chunk into bytes
+func Combine(cfiles [10][]byte) []byte {
+	var cfile []byte
+	for _, v := range cfiles {
+		cfile = append(cfile, v...)
+	}
+	return cfile
+}
