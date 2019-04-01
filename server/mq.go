@@ -12,9 +12,9 @@ import (
 )
 
 // ErrorJSON error struct to be used when error occured
-type ErrorJSON struct {
-	StatusCode int    `json:"status"`
-	ErrMessage string `json:"message"`
+type appError struct {
+	Code	int    `json:"status"`
+	Message	string `json:"message"`
 }
 
 var ch *amqp.Channel
@@ -27,23 +27,65 @@ func failOnError(err error, msg string) {
 	}
 }
 
+func (errs *appError) Error() string {
+	return errs.Message
+}
+
+// JSONAppErrorReporter Error middleware
+func JSONAppErrorReporter() gin.HandlerFunc {
+    return jsonAppErrorReporterT(gin.ErrorTypeAny)
+}
+
+func jsonAppErrorReporterT(errType gin.ErrorType) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        c.Next()
+        detectedErrors := c.Errors.ByType(errType)
+
+        log.Println("Handle APP error")
+        if len(detectedErrors) > 0 {
+            errs := detectedErrors[0].Err
+            var parsedError *appError
+            switch errs.(type) {
+				case *appError:
+					parsedError = errs.(*appError)
+				default:
+					parsedError = &appError{ 
+						Code: http.StatusInternalServerError,
+						Message: "Internal Server Error",
+					}
+            }
+            // Put the error into response
+            c.IndentedJSON(parsedError.Code, parsedError)
+            // c.Abort()
+            c.AbortWithStatusJSON(parsedError.Code, parsedError)
+            return
+        }
+
+    }
+}
+
 func startCompress(c *gin.Context) {
 	var cfiles [10][]byte
 	compressed := false
 
+	routingKey := c.GetHeader("X-ROUTING-KEY")
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
+		c.Error(err)
 		return
 	}
 
 	file, err := fileHeader.Open()
 	if err != nil {
+		c.Error(err)
 		return
 	}
 	defer file.Close()
 
 	buf := bytes.NewBuffer(nil)
 	if _, err := io.Copy(buf, file); err != nil {
+		c.Error(err)
 		return
 	}
 
@@ -61,10 +103,14 @@ func startCompress(c *gin.Context) {
 		}
 		
 		percentage := (i+1) * 10
-		err = ch.Publish("exchange_ping", "", false, false, amqp.Publishing{
+		err = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(string(percentage) + "% Compressed"),
 		})
+		if err != nil {
+			c.Error(err)
+			break
+		}
 		index = i
 	}
 
@@ -73,18 +119,29 @@ func startCompress(c *gin.Context) {
 	}
 	
 	if compressed {
-
+		c.JSON(http.StatusOK, appError{
+			Code:		http.StatusOK,
+			Message:	"File Compressed",
+		})
+		return
 	} else {
-		c.JSON(http.StatusUnprocessableEntity, "Failed to compress file")
+		c.JSON(http.StatusUnprocessableEntity, appError{
+			Code:		http.StatusUnprocessableEntity,
+			Message:	"Failed to compress file",
+		})
 		return
 	}
 }
 
 func init() {
-	url := os.Getenv("URL")
-	vhost := os.Getenv("VHOST")
-	exchangeName := os.Getenv("EXCNAME")
-	exchangeType := os.Getenv("EXCTYPE")
+	// url := os.Getenv("URL")
+	url := "amqp://0806444524:0806444524@152.118.148.103:5672/"
+	// vhost := os.Getenv("VHOST")
+	vhost := "%2f0806444524"
+	// exchangeName := os.Getenv("EXCNAME")
+	exchangeName := "1406568753"
+	// exchangeType := os.Getenv("EXCTYPE")
+	exchangeType := "direct"
 
 	conn, err = amqp.Dial(url + vhost)
 	failOnError(err, "Failed to connect to RabbitMQ")
@@ -100,6 +157,7 @@ func init() {
 
 func main() {
 	r := gin.Default()
+	r.Use(JSONAppErrorReporter())
 	r.POST("/compress", startCompress)
 	r.Run("0.0.0.0:20606")
 }
