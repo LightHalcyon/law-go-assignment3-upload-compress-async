@@ -5,7 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
+	// "os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
@@ -94,7 +94,7 @@ func startCompress(c *gin.Context) {
 	for i, v := range chunks {
 		cfiles[i], err = Compress(v)
 		if err != nil {
-			err = ch.Publish("exchange_ping", "", false, false, amqp.Publishing{
+			err = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte("Compression Error"),
 			})
@@ -133,7 +133,7 @@ func startCompress(c *gin.Context) {
 	}
 }
 
-func init() {
+func main() {
 	// url := os.Getenv("URL")
 	url := "amqp://0806444524:0806444524@152.118.148.103:5672/"
 	// vhost := os.Getenv("VHOST")
@@ -153,11 +153,10 @@ func init() {
 
 	err = ch.ExchangeDeclare(exchangeName, exchangeType, false, false, false, false, nil)
 	failOnError(err, "Failed to declare exchange")
-}
-
-func main() {
+	
 	r := gin.Default()
 	r.Use(JSONAppErrorReporter())
 	r.POST("/compress", startCompress)
+	log.Println("Running in localhost:20606")
 	r.Run("0.0.0.0:20606")
 }
