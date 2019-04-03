@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"mime/multipart"
 	// "time"
-	// "os"
+	"os"
 	"strconv"
 	"strings"
 
@@ -216,12 +216,12 @@ func download(c *gin.Context) {
 }
 
 func main() {
-	// url := "amqp://" + os.Getenv("UNAME") + ":" + os.Getenv("PW") + "@" + os.Getenv("URL") + ":" + os.Getenv("PORT") + "/"
-	url = "amqp://1406568753:167664@152.118.148.103:5672/"
-	// vhost := os.Getenv("VHOST")
-	vhost = "1406568753"
-	// exchangeName := os.Getenv("EXCNAME")
-	exchangeName = "1406568753"
+	url := "amqp://" + os.Getenv("UNAME") + ":" + os.Getenv("PW") + "@" + os.Getenv("URL") + ":" + os.Getenv("PORT") + "/"
+	// url = "amqp://1406568753:167664@152.118.148.103:5672/"
+	vhost := os.Getenv("VHOST")
+	// vhost = "1406568753"
+	exchangeName := os.Getenv("EXCNAME")
+	// exchangeName = "1406568753"
 	exchangeType = "direct"
 
 	files = make(map[string]string)

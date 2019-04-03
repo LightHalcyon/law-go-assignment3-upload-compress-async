@@ -1,4 +1,4 @@
-// const url = process.env.URL + "/compress";
+const url = process.env.URL + "/compress";
 // dec2hex :: Integer -> String
 function dec2hex (dec) {
     return ('0' + dec.toString(16)).substr(-2)
@@ -11,14 +11,14 @@ function generateId (len) {
     return Array.from(arr, dec2hex).join('')
 }
 
-// const username = process.env.MQUNAME;
-const username = "1406568753";
+const username = process.env.MQUNAME;
+// const username = "1406568753";
 
-// const password = process.env.MQPW;
-const password = "167664";
+const password = process.env.MQPW;
+// const password = "167664";
 
-// const vhost = process.env.MQVHOST;
-const vhost = "1406568753";
+const vhost = process.env.MQVHOST;
+// const vhost = "1406568753";
 
 const host = window.location.href.replace("http://", '');
 
