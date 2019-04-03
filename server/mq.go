@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"mime/multipart"
 	// "time"
+	// "os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -179,13 +180,12 @@ func startCompress(c *gin.Context) {
 }
 
 func main() {
-	// url := os.Getenv("URL")
+	// url := "amqp://" + os.Getenv("UNAME") + ":" + os.Getenv("PW") + "@" + os.Getenv("URL") + ":" + os.Getenv("PORT") + "/"
 	url = "amqp://0806444524:0806444524@152.118.148.103:5672/"
 	// vhost := os.Getenv("VHOST")
 	vhost = "%2f0806444524"
 	// exchangeName := os.Getenv("EXCNAME")
 	exchangeName = "1406568753"
-	// exchangeType := os.Getenv("EXCTYPE")
 	exchangeType = "direct"
 
 	files = make(map[string]string)
