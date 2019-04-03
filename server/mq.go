@@ -179,7 +179,7 @@ func startCompress(c *gin.Context) {
 
 			err2 := ch.Publish(exchangeName, routingKey, false, false, amqp.Publishing{
 				ContentType: "text/plain",
-				Body:        []byte("<a href=" + currURL + "></a>"),
+				Body:        []byte("<a href=" + currURL + ">" + currURL + "</a>"),
 			})
 			failOnError(err2, "Publish Error")
 			files[key] = filename
