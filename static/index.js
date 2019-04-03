@@ -12,17 +12,17 @@ function generateId (len) {
 }
 
 // const username = process.env.MQUNAME;
-const username = "0806444524";
+const username = "1406568753";
 
 // const password = process.env.MQPW;
-const password = "0806444524";
+const password = "167664";
 
 // const vhost = process.env.MQVHOST;
-const vhost = "/0806444524";
+const vhost = "1406568753";
 
 const host = window.location.href.replace("http://", '');
 
-const url = 'http://localhost:20606/compress';
+const url = 'http://localhost:20608/compress';
 
 var id = ""
 

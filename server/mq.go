@@ -13,6 +13,7 @@ import (
 	// "time"
 	// "os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
@@ -172,6 +173,15 @@ func startCompress(c *gin.Context) {
 			err = ioutil.WriteFile(filename, cfile, 0644)
 	
 			key := TokenGenerator()
+
+			// currURL := "http://1406568753.law.infralabs.cs.ui.ac.id:20608/download" + key
+			currURL := "http://localhost:20608/download/" + key
+
+			err2 := ch.Publish(exchangeName, routingKey, false, false, amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        []byte("<a href=" + currURL + "></a>"),
+			})
+			failOnError(err2, "Publish Error")
 			files[key] = filename
 		}
 	}(chunks, ch, routingKey, fileHeader)
@@ -179,11 +189,37 @@ func startCompress(c *gin.Context) {
 	return	
 }
 
+func download(c *gin.Context) {
+	c.Header("Access-Control-Allow-Origin","*")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, X-Routing-Key, Host")
+
+	id := c.Param("id")
+
+	if _, ok := files[id]; !ok {
+		c.JSON(http.StatusNotFound, appError{
+			Code:		http.StatusNotFound,
+			Message:	"File not found, have you uploaded it here?",
+		})
+		return
+	}
+
+	targetFile := files[id]
+	fileName := strings.Replace(targetFile, "dl/" , "", -1)
+
+    c.Header("Content-Description", "File Transfer")
+    c.Header("Content-Transfer-Encoding", "binary")
+    c.Header("Content-Disposition", "attachment; filename=" + fileName)
+    c.Header("Content-Type", "application/octet-stream")
+	c.File(targetFile)
+	return
+}
+
 func main() {
 	// url := "amqp://" + os.Getenv("UNAME") + ":" + os.Getenv("PW") + "@" + os.Getenv("URL") + ":" + os.Getenv("PORT") + "/"
-	url = "amqp://0806444524:0806444524@152.118.148.103:5672/"
+	url = "amqp://1406568753:167664@152.118.148.103:5672/"
 	// vhost := os.Getenv("VHOST")
-	vhost = "%2f0806444524"
+	vhost = "1406568753"
 	// exchangeName := os.Getenv("EXCNAME")
 	exchangeName = "1406568753"
 	exchangeType = "direct"
@@ -204,6 +240,7 @@ func main() {
 	r := gin.Default()
 	// r.Use(JSONAppErrorReporter())
 	r.POST("/compress", startCompress)
+	r.GET("/download/:id", download)
 	conf := cors.DefaultConfig()
 	conf.AllowOrigins = []string{"*"}
 	conf.AddAllowHeaders("X-ROUTING-KEY")
@@ -214,5 +251,5 @@ func main() {
 	conf.AddAllowHeaders("Host")
 	r.Use(cors.New(conf))
 	// log.Println("Running in localhost:20606")
-	r.Run("0.0.0.0:20606")
+	r.Run("0.0.0.0:20608")
 }
