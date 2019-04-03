@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"fmt"
 	"math/rand"
+	"mime/multipart"
+	// "time"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
@@ -25,6 +28,7 @@ var ch *amqp.Channel
 var err error
 var conn *amqp.Connection
 var files map[string]string
+var url, vhost, exchangeName, exchangeType string
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -81,8 +85,10 @@ func startCompress(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin","*")
 	c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, X-Routing-Key, Host")
-	var cfiles [10][]byte
-	compressed := false
+
+	// log.Println(url, vhost)
+
+	// compressed := false
 	// log.Println(c.Request.Header)
 
 	routingKey := c.GetHeader("X-Routing-Key")
@@ -118,69 +124,69 @@ func startCompress(c *gin.Context) {
 	}
 
 	chunks := Split(buf.Bytes())
-	index := 0
-	for i, v := range chunks {
-		cfiles[i], err = Compress(v)
-		if err != nil {
-			err = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
-				ContentType: "text/plain",
-				Body:        []byte("Compression Error"),
-			})
-			failOnError(err, "Compression Error")
-			break
-		}
-		
-		percentage := (i+1) * 10
-		_ = ch.Publish("exchange_ping", routingKey, false, false, amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(string(percentage) + "% Compressed"),
-		})
-		index = i
-	}
 
-	if index >= 9 {
-		compressed = true
-	}
-	
-	if compressed {
-		cfile := Combine(cfiles)
-		filename := filepath.Base(fileHeader.Filename) + ".gz"
-
-		err = ioutil.WriteFile(filename, cfile, 0644)
-
-		key := TokenGenerator()
-		files[key] = filename
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, appError{
-				Code:		http.StatusInternalServerError,
-				Message:	"Failed to write compressed file",
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, appError{
-			Code:		http.StatusOK,
-			Message:	"File Compressed",
-		})
-		return
-	}
-	c.JSON(http.StatusUnprocessableEntity, appError{
-		Code:		http.StatusUnprocessableEntity,
-		Message:	"Failed to compress file",
+	c.JSON(http.StatusOK, appError{
+		Code:		http.StatusOK,
+		Message:	"File Compressed",
 	})
+
+	go func(chunks [10][]byte, ch *amqp.Channel, routingKey string, fileHeader *multipart.FileHeader) {
+		var cfiles [10][]byte
+		var err1 error
+
+		compression := true
+
+		log.Println(routingKey)
+
+		// time.Sleep(10 * time.Second)
+
+		for i, v := range chunks {
+			// log.Println(i)
+			cfiles[i], err1 = Compress(v)
+			if err1 != nil {
+				err = ch.Publish(exchangeName, routingKey, false, false, amqp.Publishing{
+					ContentType: "text/plain",
+					Body:        []byte("Compression Error"),
+				})
+				failOnError(err1, "Compression Error")
+				compression = false
+				break
+			}
+			
+			percentage := (i+1) * 10
+			// log.Println(string(percentage))
+			err2 := ch.Publish(exchangeName, routingKey, false, false, amqp.Publishing{
+				ContentType: "text/plain",
+				Body:        []byte(strconv.Itoa(percentage) + "% Compressed"),
+			})
+			failOnError(err2, "Publish Error")
+			// time.Sleep(1 * time.Second)
+		}
+
+		if compression {
+			cfile := Combine(cfiles)
+			sep := string(filepath.Separator)
+			filename := "dl/" + filepath.Base(sep + "dl" + sep + fileHeader.Filename) + ".gz"
+	
+			err = ioutil.WriteFile(filename, cfile, 0644)
+	
+			key := TokenGenerator()
+			files[key] = filename
+		}
+	}(chunks, ch, routingKey, fileHeader)
+
 	return	
 }
 
 func main() {
 	// url := os.Getenv("URL")
-	url := "amqp://0806444524:0806444524@152.118.148.103:5672/"
+	url = "amqp://0806444524:0806444524@152.118.148.103:5672/"
 	// vhost := os.Getenv("VHOST")
-	vhost := "%2f0806444524"
+	vhost = "%2f0806444524"
 	// exchangeName := os.Getenv("EXCNAME")
-	exchangeName := "1406568753"
+	exchangeName = "1406568753"
 	// exchangeType := os.Getenv("EXCTYPE")
-	exchangeType := "direct"
+	exchangeType = "direct"
 
 	files = make(map[string]string)
 
