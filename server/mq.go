@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/streadway/amqp"
+	"github.com/gin-contrib/cors"
 )
 
 // ErrorJSON error struct to be used when error occured
@@ -77,13 +78,19 @@ func TokenGenerator() string {
 }
 
 func startCompress(c *gin.Context) {
+	c.Header("Access-Control-Allow-Origin","*")
+	c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, X-Routing-Key, Host")
 	var cfiles [10][]byte
 	compressed := false
+	// log.Println(c.Request.Header)
 
-	routingKey := c.GetHeader("X-ROUTING-KEY")
+	routingKey := c.GetHeader("X-Routing-Key")
 
+	// log.Println(c.Request.Body)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
+		// log.Println(err)
 		c.JSON(http.StatusBadRequest, appError{
 			Code:		http.StatusBadRequest,
 			Message:	"File get error, did you upload a file?",
@@ -191,6 +198,15 @@ func main() {
 	r := gin.Default()
 	// r.Use(JSONAppErrorReporter())
 	r.POST("/compress", startCompress)
-	log.Println("Running in localhost:20606")
+	conf := cors.DefaultConfig()
+	conf.AllowOrigins = []string{"*"}
+	conf.AddAllowHeaders("X-ROUTING-KEY")
+	conf.AddAllowHeaders("Content-Type")
+	conf.AddAllowHeaders("Access-Control-Allow-Origin")
+	conf.AddAllowHeaders("Access-Control-Allow-Headers")
+	conf.AddAllowHeaders("Access-Control-Allow-Methods")
+	conf.AddAllowHeaders("Host")
+	r.Use(cors.New(conf))
+	// log.Println("Running in localhost:20606")
 	r.Run("0.0.0.0:20606")
 }
